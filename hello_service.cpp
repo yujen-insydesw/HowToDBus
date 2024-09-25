@@ -26,8 +26,13 @@ com.example.HelloService.conf
 */
 
 #include <iostream>
+#include <cstddef>
+#include <cstdio>
 #include <string.h>
 #include <unistd.h>  // Include this header for usleep
+
+//#include <thread>
+#include <future>     // async
 
 #include <dbus/dbus.h>
 
@@ -58,42 +63,79 @@ int main() {
     
     // Main loop
     while (true) {
+
         // Handle incoming messages
+        // Sleep briefly to avoid busy waiting usleep(1000);
         //dbus_connection_read_write(connection, 1000);// return true/false; can set timeout (ms)
+
         // Blocking way
         // useful to look at spec: https://dbus.freedesktop.org/doc/api/html/group__DBusConnection.html#ga580d8766c23fe5f49418bc7d87b67dc6
         dbus_connection_read_write_dispatch(connection, -1);
-        std::cout << "read write:" << std::endl;
         
-        DBusMessage* message = dbus_connection_pop_message(connection);
-        std::cout << "pop message:" << std::endl;
-        if (message) {
-            if (dbus_message_is_method_call(message,
-                    "com.example.HelloInterface",
-                    "Hello")
-                ) {
-                // Get input
-                const char* inputName;
-                dbus_message_get_args(message, nullptr, DBUS_TYPE_STRING, &inputName, DBUS_TYPE_INVALID);
-                
-                // Service
-                std::string greeting = Hello(inputName);
-                
-                // Create a reply message
-                DBusMessage* reply = dbus_message_new_method_return(message);
-                dbus_message_append_args(reply, DBUS_TYPE_STRING, &greeting, DBUS_TYPE_INVALID);
-                
-                // Send the reply
-                dbus_connection_send(connection, reply, nullptr);
-                dbus_message_unref(reply);
-            }
-            dbus_message_unref(message);
+
+        // Perform the task asynchronously
+        std::async(std::launch::async, 
+            [] () {
+                //
+                std::cerr << "async: " << std::endl;
+            });
+
+        // avoid crosses initialization (related with goto)
+        DBusMessage* message = nullptr;
+        const char* inputName = nullptr;
+        std::string greeting;
+        DBusMessage* reply = nullptr;
+
+
+        //
+
+        if ( nullptr == (message = dbus_connection_pop_message(connection)) ) {
+//            ::perror(dbus_error.name);
+//            ::perror(dbus_error.message);
+            goto UNREF_MESSAGE;
         }
+
+        //
+
+        if ( false == dbus_message_is_method_call(message, "com.example.HelloInterface", "Hello") ) {
+            //continue;
+            goto UNREF_MESSAGE;
+        }
+
+
+        // Get input
+        dbus_message_get_args(message, nullptr, DBUS_TYPE_STRING, &inputName, DBUS_TYPE_INVALID);
         
-        // Sleep briefly to avoid busy waiting
-        //usleep(100000); // 100 ms
+        // Service
+        greeting = Hello(inputName);
+        
+        // Create a reply message
+        reply = dbus_message_new_method_return(message);
+        dbus_message_append_args(reply, DBUS_TYPE_STRING, &greeting, DBUS_TYPE_INVALID);
+        
+        // Send the reply
+        dbus_connection_send(connection, reply, nullptr);
+
+UNREF_REPLY:
+        dbus_message_unref(reply);
+
+UNREF_MESSAGE:
+        dbus_message_unref(message);
+        
     }
 
+/*
+* Applications must not close shared connections -
+* see dbus_connection_close() docs. This is a bug in the application.
+*/
+//CLOSE_CONNECTION:
+//    ::dbus_connection_close(connection);
+
+/*
+* When using the System Bus, unreference
+* the connection instead of closing it
+*/
+UNREF_CONNECTION:
     dbus_connection_unref(connection);
     return 0;
 }
