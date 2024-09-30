@@ -23,6 +23,37 @@ com.example.HelloService.conf
 </busconfig>
 
 
+
+
+其實還需要註冊其他的
+
+DBusHandlerResult handle_hello_world(DBusConnection* conn, DBusMessage* msg) {
+    // Handle the method call here
+    // ...
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
+
+DBusObjectPathVTable vtable = {
+    .message_function = handle_hello_world,
+    // Add more methods here if needed
+};
+dbus_connection_register_object_path(conn, "/com/example/MyService", &vtable, nullptr);
+
+
+sudo service dbus --full-restart
+
+g++ ./hello_service.cpp -o hello_service $(pkg-config dbus-1 --cflags) -ldbus-1 -lpthread -Wall -Wextra
+
+
+dbus message 介紹
+https://blog.csdn.net/f110300641/article/details/106822511#:~:text=%E9%A6%96%E5%85%88%E4%BD%BF%E7%94%A8.
+
+dbus_connection_register_object_path
+
+DBusObjectPathVTable
+
+
+
 */
 
 #include <iostream>
@@ -35,6 +66,13 @@ com.example.HelloService.conf
 #include <future>     // async
 
 #include <dbus/dbus.h>
+
+//
+DBusHandlerResult handle_hello_world(DBusConnection* conn, DBusMessage* msg, void* user_data) {
+    // Handle the method call here
+    // ...
+    return DBUS_HANDLER_RESULT_HANDLED;
+}
 
 // Define the method implementation
 std::string Hello(const std::string& name) {
@@ -60,6 +98,16 @@ int main() {
         dbus_error_free(&error);
         return 1;
     }
+
+
+// 
+DBusObjectPathVTable vtable = {
+    .message_function = handle_hello_world,
+    // Add more methods here if needed
+};
+dbus_connection_register_object_path(connection, "/com/example/HelloService", &vtable, nullptr);
+
+
     
     // Main loop
     while (true) {
